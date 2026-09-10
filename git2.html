@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070b17">
+  <title>World Explorer — Interactive 3D Earth</title>
+
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070b17;
+      --panel: rgba(15, 23, 43, .94);
+      --border: rgba(255, 255, 255, .12);
+      --text: #eef5ff;
+      --muted: #a0afc7;
+      --accent: #66ead4;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+
+    :focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 4px;
+    }
+
+    #globe {
+      position: fixed;
+      inset: 0;
+    }
+
+    .topbar {
+      position: fixed;
+      inset: 0 0 auto;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 24px 32px;
+      background: linear-gradient(#070b17ee, transparent);
+      pointer-events: none;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 43px;
+      height: 43px;
+      display: grid;
+      place-items: center;
+      border: 1px solid #66ead455;
+      border-radius: 14px;
+      color: var(--accent);
+      font-size: 28px;
+      background: #66ead40b;
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 17px;
+      letter-spacing: -.4px;
+    }
+
+    .brand small {
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .live {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .live::before {
+      content: "";
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      margin-right: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 15px var(--accent);
+    }
+
+    .panel {
+      position: fixed;
+      top: 112px;
+      left: 28px;
+      bottom: 82px;
+      z-index: 3;
+      width: 310px;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 20px 70px #0005;
+      overflow: hidden;
+    }
+
+    .panel-header { padding: 24px 22px 16px; }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--accent);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 27px;
+      letter-spacing: -1px;
+    }
+
+    .intro {
+      margin: 10px 0 18px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    .search-label {
+      display: block;
+      margin-bottom: 7px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    #search {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      color: var(--text);
+      background: #070d1c;
+    }
+
+    #count {
+      margin: 13px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    #country-list {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 0 10px 12px;
+      scrollbar-width: thin;
+      scrollbar-color: #334762 transparent;
+    }
+
+    .country-button {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      width: 100%;
+      padding: 12px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      background: transparent;
+      color: #cad7eb;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    .country-button:hover { background: #ffffff08; }
+
+    .country-button[aria-pressed="true"] {
+      color: var(--accent);
+      background: #66ead412;
+      border-color: #66ead430;
+    }
+
+    .country-button span:last-child {
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .empty {
+      padding: 15px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .info {
+      position: fixed;
+      z-index: 3;
+      top: 114px;
+      right: 28px;
+      width: 275px;
+      padding: 22px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+    }
+
+    .info[hidden] { display: none; }
+
+    .info h2 {
+      margin: 0 0 18px;
+      font-size: 25px;
+      line-height: 1.2;
+      padding-right: 15px;
+    }
+
+    .close {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 30px;
+      height: 30px;
+      border: 0;
+      border-radius: 50%;
+      background: #ffffff0d;
+      color: var(--muted);
+      font-size: 20px;
+    }
+
+    .detail {
+      display: flex;
+      justify-content: space-between;
+      gap: 15px;
+      padding: 10px 0;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+    }
+
+    .detail span { color: var(--muted); }
+    .detail strong { text-align: right; font-weight: 500; }
+
+    .controls {
+      position: fixed;
+      z-index: 3;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--panel);
+      backdrop-filter: blur(15px);
+    }
+
+    .controls button {
+      padding: 10px 15px;
+      border: 0;
+      border-radius: 9px;
+      background: #ffffff08;
+      color: var(--text);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .controls button:hover { background: #ffffff15; }
+    .controls button:disabled { opacity: .45; cursor: wait; }
+    .controls .accent { color: var(--accent); }
+
+    .help {
+      position: fixed;
+      bottom: 31px;
+      right: 28px;
+      z-index: 2;
+      color: var(--muted);
+      text-align: right;
+      font-size: 10px;
+      line-height: 1.8;
+      max-width: 240px;
+    }
+
+    .help a { color: var(--accent); }
+
+    .loading {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: grid;
+      place-items: center;
+      background: #070b17f5;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .loading[hidden] { display: none; }
+
+    .spinner {
+      width: 55px;
+      height: 55px;
+      margin: 0 auto 22px;
+      border: 2px solid #66ead422;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading p { color: var(--muted); font-size: 13px; }
+    #retry {
+      border: 0;
+      border-radius: 9px;
+      padding: 10px 20px;
+      background: var(--accent);
+      color: #092620;
+      font-weight: 700;
+    }
+
+    .tooltip {
+      padding: 8px 12px;
+      border: 1px solid #66ead444;
+      border-radius: 8px;
+      color: white;
+      background: #101c30;
+      font: 12px system-ui, sans-serif;
+    }
+
+    @media (max-width: 1000px) {
+      .help { display: none; }
+      .info { width: 230px; }
+      .panel { width: 270px; }
+    }
+
+    @media (max-width: 700px) {
+      .topbar { padding: 18px; }
+      .live { display: none; }
+
+      .panel {
+        top: auto;
+        left: 12px;
+        right: 12px;
+        bottom: 80px;
+        width: auto;
+        height: 245px;
+        border-radius: 18px;
+      }
+
+      .panel-header { padding: 14px 16px 9px; }
+      .panel-header .eyebrow, .intro, .search-label { display: none; }
+      h1 { margin-bottom: 10px; font-size: 19px; }
+      #search { padding: 9px 12px; }
+      #count { margin-top: 7px; }
+
+      .info {
+        top: 83px;
+        left: 12px;
+        right: 12px;
+        width: auto;
+        padding: 15px;
+      }
+
+      .info h2 { font-size: 20px; margin-bottom: 9px; }
+      .info .eyebrow { display: none; }
+      .detail { display: inline-flex; margin-right: 15px; padding: 6px 0; }
+      .controls { bottom: 15px; }
+      .controls button { padding: 9px 12px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .spinner { animation: none; }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="globe" aria-label="Interactive 3D globe"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-icon" aria-hidden="true">◎</div>
+      <div>
+        <strong>World Explorer</strong>
+        <small>A planet of possibilities</small>
+      </div>
+    </div>
+    <div class="live">Interactive 3D experience</div>
+  </header>
+
+  <aside class="panel" aria-labelledby="explore-title">
+    <div class="panel-header">
+      <p class="eyebrow">Your next discovery</p>
+      <h1 id="explore-title">Explore the world.</h1>
+      <p class="intro">
+        Spin the Earth, discover a place, and fly there in 3D.
+      </p>
+
+      <label for="search" class="search-label">
+        Search countries and territories
+      </label>
+      <input
+        id="search"
+        type="search"
+        placeholder="Search a country…"
+        autocomplete="off"
+        disabled
+      >
+      <p id="count" role="status">Loading countries…</p>
+    </div>
+
+    <div id="country-list" aria-label="Countries and territories"></div>
+  </aside>
+
+  <section
+    class="info"
+    id="info"
+    aria-labelledby="country-name"
+    aria-live="polite"
+    hidden
+  >
+    <button class="close" id="close-info" aria-label="Close country details">
+      ×
+    </button>
+
+    <p class="eyebrow">Currently exploring</p>
+    <h2 id="country-name"></h2>
+
+    <div class="detail">
+      <span>Continent</span>
+      <strong id="continent"></strong>
+    </div>
+    <div class="detail">
+      <span>Region</span>
+      <strong id="region"></strong>
+    </div>
+    <div class="detail">
+      <span>Country code</span>
+      <strong id="country-code"></strong>
+    </div>
+  </section>
+
+  <nav class="controls" aria-label="Globe controls">
+    <button id="rotate" class="accent" disabled>Pause rotation</button>
+    <button id="zoom-in" aria-label="Zoom in" disabled>＋</button>
+    <button id="zoom-out" aria-label="Zoom out" disabled>−</button>
+    <button id="reset" disabled>Reset view</button>
+  </nav>
+
+  <div class="help">
+    Drag to rotate · Scroll or pinch to zoom<br>
+    Boundaries:
+    <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">
+      Natural Earth
+    </a>
+    · Dataset coverage applies
+  </div>
+
+  <div class="loading" id="loading" role="status">
+    <div>
+      <div class="spinner" id="spinner"></div>
+      <h2 id="loading-title">Preparing your planet</h2>
+      <p id="loading-message">Loading the globe and country boundaries…</p>
+      <button id="retry" hidden>Try again</button>
+    </div>
+  </div>
+
+  <!-- External libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/globe.gl"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3-geo@3/dist/d3-geo.min.js"></script>
+
+  <script>
+    const DATA_URL =
+      "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson";
+
+    const TEXTURE_URL =
+      "https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-blue-marble.jpg";
+
+    const BUMP_URL =
+      "https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png";
+
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+
+    const search = document.getElementById("search");
+    const list = document.getElementById("country-list");
+    const count = document.getElementById("count");
+    const info = document.getElementById("info");
+    const rotateButton = document.getElementById("rotate");
+
+    let globe;
+    let countries = [];
+    let selected = null;
+    let hovered = null;
+    let rotating = !reducedMotion;
+
+    function nameOf(feature) {
+      const p = feature.properties;
+      return p.NAME_EN || p.ADMIN || p.NAME || "Unnamed area";
+    }
+
+    function codeOf(feature) {
+      const p = feature.properties;
+      const code = p.ISO_A3_EH || p.ISO_A3;
+      return code && code !== "-99" ? code : "—";
+    }
+
+    function normalise(text) {
+      return String(text)
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+    }
+
+    function updateRotation() {
+      if (!globe) return;
+      globe.controls().autoRotate = rotating;
+      rotateButton.textContent = rotating
+        ? "Pause rotation"
+        : "Start rotation";
+      rotateButton.setAttribute("aria-pressed", String(rotating));
+    }
+
+    function refreshPolygons() {
+      globe
+        .polygonAltitude(f =>
+          f === selected ? 0.025 : f === hovered ? 0.014 : 0.004
+        )
+        .polygonCapColor(f =>
+          f === selected
+            ? "rgba(102, 234, 212, 0.60)"
+            : f === hovered
+              ? "rgba(102, 234, 212, 0.32)"
+              : "rgba(80, 135, 165, 0.10)"
+        );
+    }
+
+    function renderList() {
+      const query = normalise(search.value.trim());
+
+      const visible = countries.filter(feature => {
+        const p = feature.properties;
+        const searchable = [
+          nameOf(feature),
+          p.ADMIN,
+          p.NAME,
+          p.NAME_LONG,
+          codeOf(feature)
+        ].filter(Boolean).join(" ");
+
+        return normalise(searchable).includes(query);
+      });
+
+      count.textContent =
+        `${visible.length} of ${countries.length} countries and territories`;
+
+      list.replaceChildren();
+
+      if (!visible.length) {
+        const message = document.createElement("p");
+        message.className = "empty";
+        message.textContent = "No matches. Try another name.";
+        list.appendChild(message);
+        return;
+      }
+
+      const fragment = document.createDocumentFragment();
+
+      visible.forEach(feature => {
+        const button = document.createElement("button");
+        button.className = "country-button";
+        button.type = "button";
+        button.setAttribute("aria-pressed", String(feature === selected));
+
+        const name = document.createElement("span");
+        name.textContent = nameOf(feature);
+
+        const code = document.createElement("span");
+        code.textContent = codeOf(feature);
+
+        button.append(name, code);
+        button.addEventListener("click", () => selectCountry(feature));
+        fragment.appendChild(button);
+      });
+
+      list.appendChild(fragment);
+    }
+
+    function selectCountry(feature) {
+      selected = feature;
+      rotating = false;
+      updateRotation();
+      refreshPolygons();
+
+      // Use Natural Earth's label point where available.
+      // This avoids centering on distant overseas territories.
+      const p = feature.properties;
+      const labelLat = Number(p.LABEL_Y);
+      const labelLng = Number(p.LABEL_X);
+
+      let lat, lng;
+
+      if (
+        p.LABEL_Y != null && p.LABEL_X != null &&
+        Number.isFinite(labelLat) && Number.isFinite(labelLng)
+      ) {
+        lat = labelLat;
+        lng = labelLng;
+      } else {
+        [lng, lat] = d3.geoCentroid(feature);
+      }
+
+      // Keep large countries farther away and small countries closer.
+      const area = d3.geoArea(feature);
+      const altitude = Math.max(
+        0.65,
+        Math.min(2.1, 0.65 + Math.sqrt(area) * 1.5)
+      );
+
+      globe.pointOfView(
+        { lat, lng, altitude },
+        reducedMotion ? 0 : 1500
+      );
+
+      document.getElementById("country-name").textContent = nameOf(feature);
+      document.getElementById("continent").textContent = p.CONTINENT || "—";
+      document.getElementById("region").textContent = p.SUBREGION || "—";
+      document.getElementById("country-code").textContent = codeOf(feature);
+      info.hidden = false;
+
+      // Update states without replacing the focused list button.
+      [...list.children].forEach(button => {
+        if (!button.matches(".country-button")) return;
+        button.setAttribute(
+          "aria-pressed",
+          String(button.firstElementChild.textContent === nameOf(feature))
+        );
+      });
+    }
+
+    function clearSelection() {
+      selected = null;
+      info.hidden = true;
+      refreshPolygons();
+
+      list.querySelectorAll(".country-button").forEach(button => {
+        button.setAttribute("aria-pressed", "false");
+      });
+    }
+
+    function resetView() {
+      clearSelection();
+      hovered = null;
+      refreshPolygons();
+
+      globe.pointOfView(
+        { lat: 20, lng: 15, altitude: 2.5 },
+        reducedMotion ? 0 : 1200
+      );
+
+      rotating = !reducedMotion;
+      updateRotation();
+    }
+
+    function zoom(factor) {
+      const view = globe.pointOfView();
+      globe.pointOfView({
+        ...view,
+        altitude: Math.max(0.35, Math.min(4.5, view.altitude * factor))
+      }, reducedMotion ? 0 : 350);
+    }
+
+    async function init() {
+      try {
+        if (typeof Globe !== "function" || typeof d3 === "undefined") {
+          throw new Error("The globe libraries could not be loaded.");
+        }
+
+        const response = await fetch(DATA_URL);
+        if (!response.ok) throw new Error("Country data is unavailable.");
+
+        const data = await response.json();
+
+        countries = data.features
+          .filter(feature => feature.geometry)
+          .sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+
+        globe = Globe()(document.getElementById("globe"))
+          .width(window.innerWidth)
+          .height(window.innerHeight)
+          .backgroundColor("#070b17")
+          .globeImageUrl(TEXTURE_URL)
+          .bumpImageUrl(BUMP_URL)
+          .showAtmosphere(true)
+          .atmosphereColor("#65b8ee")
+          .atmosphereAltitude(0.17)
+          .polygonsData(countries)
+          .polygonSideColor(() => "rgba(70, 180, 170, 0.3)")
+          .polygonStrokeColor(() => "rgba(175, 225, 240, 0.55)")
+          .polygonsTransitionDuration(reducedMotion ? 0 : 220)
+          .polygonLabel(feature => {
+            const label = document.createElement("div");
+            label.className = "tooltip";
+            label.textContent = nameOf(feature);
+            return label;
+          })
+          .onPolygonHover(feature => {
+            hovered = feature;
+            document.getElementById("globe").style.cursor =
+              feature ? "pointer" : "grab";
+            refreshPolygons();
+          })
+          .onPolygonClick(feature => selectCountry(feature));
+
+        globe.controls().autoRotateSpeed = 0.45;
+        globe.controls().enableDamping = !reducedMotion;
+        globe.controls().minDistance = 135;
+        globe.controls().maxDistance = 550;
+
+        // Stop automatic rotation when the user takes control.
+        globe.controls().addEventListener("start", () => {
+          rotating = false;
+          updateRotation();
+        });
+
+        refreshPolygons();
+        globe.pointOfView({ lat: 20, lng: 15, altitude: 2.5 });
+        updateRotation();
+
+        renderList();
+        search.disabled = false;
+
+        document.querySelectorAll(".controls button").forEach(button => {
+          button.disabled = false;
+        });
+
+        document.getElementById("loading").hidden = true;
+
+      } catch (error) {
+        console.error(error);
+
+        document.getElementById("spinner").hidden = true;
+        document.getElementById("loading-title").textContent =
+          "Unable to load the globe";
+        document.getElementById("loading-message").textContent =
+          "Check your internet connection and ensure WebGL is enabled in your browser.";
+        document.getElementById("retry").hidden = false;
+        count.textContent = "Map unavailable";
+      }
+    }
+
+    search.addEventListener("input", renderList);
+
+    rotateButton.addEventListener("click", () => {
+      rotating = !rotating;
+      updateRotation();
+    });
+
+    document.getElementById("zoom-in").addEventListener("click", () => zoom(0.8));
+    document.getElementById("zoom-out").addEventListener("click", () => zoom(1.25));
+    document.getElementById("reset").addEventListener("click", resetView);
+
+    document.getElementById("close-info").addEventListener("click", () => {
+      clearSelection();
+      search.focus();
+    });
+
+    document.getElementById("retry").addEventListener("click", () => {
+      window.location.reload();
+    });
+
+    window.addEventListener("resize", () => {
+      if (globe) {
+        globe.width(window.innerWidth).height(window.innerHeight);
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>
